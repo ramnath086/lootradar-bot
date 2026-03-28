@@ -94,7 +94,7 @@ Link:
 # ===== MAIN =====
 
 async def main():
-    client = TelegramClient('session', api_id, api_hash)
+    client = TelegramClient('render_session', api_id, api_hash)
     await client.start()
 
     print("🚀 BOT LIVE...")
