@@ -1,15 +1,12 @@
-from flask import Flask
-import threading
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "LootRadar Bot Running ✅"
 import asyncio
 import re
 import requests
+import random
+import os
+import threading
+from datetime import datetime
 from telethon import TelegramClient, events
+from flask import Flask
 from openai import OpenAI
 
 # ===== CONFIG =====
@@ -18,7 +15,6 @@ api_hash = "76e7dbf85f9b4121cf2368f8c981537f"
 
 destination_channel = -1003830464685
 affiliate_tag = "lootradar21-21"
-OPENAI_API_KEY = "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"  # ⚠️ use new key
 
 source_channels = [
     -1001246257619,
@@ -28,23 +24,27 @@ source_channels = [
     -1002200312455
 ]
 
-# ===== INIT =====
+OPENAI_API_KEY = os.getenv("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")
 ai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# ===== FLASK (KEEP RENDER ALIVE) =====
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "LootRadar Bot Running ✅"
 
 # ===== LINK FUNCTIONS =====
 
 def expand_url(url):
     try:
-        response = requests.get(url, allow_redirects=True, timeout=5)
-        return response.url
+        return requests.get(url, allow_redirects=True, timeout=5).url
     except:
         return url
 
 def extract_asin(url):
     match = re.search(r'/dp/([A-Z0-9]{10})', url)
-    if match:
-        return match.group(1)
-    return None
+    return match.group(1) if match else None
 
 def build_affiliate_link(url):
     expanded = expand_url(url)
@@ -52,33 +52,32 @@ def build_affiliate_link(url):
 
     if asin:
         return f"https://www.amazon.in/dp/{asin}?tag={affiliate_tag}"
-    
     return expanded
-
-def remove_links(text):
-    return re.sub(r'http\S+', '', text)
 
 # ===== AI CAPTION =====
 
-def generate_caption(text, link):
-    clean_text = remove_links(text)
-    title = clean_text.split("\n")[0].strip()
+def generate_caption(title, link, prefix):
+
+    cta_list = [
+        "📢 Join for daily Amazon deals 👉 https://t.me/smartlootradar",
+        "🔥 Don’t miss deals! Join now 👉 https://t.me/smartlootradar",
+        "⚡ Live deals here 👉 https://t.me/smartlootradar",
+    ]
+
+    forward_line = "🔁 Share with friends who love deals!"
+    cta = random.choice(cta_list)
 
     prompt = f"""
 Create a high-converting Telegram deal post.
 
 Rules:
-- Max 5 lines
+- Max 4 lines
 - Use emojis
-- Add urgency (limited deal)
+- Add urgency
 - Strong CTA
-- Keep it short
 
 Product:
 {title}
-
-Link:
-{link}
 """
 
     try:
@@ -87,19 +86,24 @@ Link:
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
-        return response.choices[0].message.content.strip()
+        ai_text = response.choices[0].message.content.strip()
     except:
-        # fallback if API fails
-        return f"""🔥 HOT DEAL ALERT!
+        ai_text = title
 
-{title}
+    return f"""{prefix}
+
+{ai_text}
 
 👉 Buy Now: {link}
 
 ⚡ Limited time deal!
+
+{forward_line}
+
+{cta}
 """
 
-# ===== MAIN =====
+# ===== MAIN BOT =====
 
 async def main():
     client = TelegramClient('render_session', api_id, api_hash)
@@ -107,45 +111,99 @@ async def main():
 
     print("🚀 BOT LIVE...")
 
+    posted_links = set()
+
     @client.on(events.NewMessage)
     async def handler(event):
-
-        print("Incoming:", event.chat_id, flush=True)
 
         if event.chat_id not in source_channels:
             return
 
-        text = event.message.message
+        text = event.message.message or event.raw_text or ""
 
-        if not text:
+        print("\n📩 Incoming:", event.chat_id, flush=True)
+        print("Message:", text[:100], flush=True)
+
+        # ===== EXTRACT LINKS (ADVANCED) =====
+        links = []
+
+        links += re.findall(r'(https?://\S+)', text)
+
+        if event.message.entities:
+            for ent in event.message.entities:
+                try:
+                    if hasattr(ent, 'url') and ent.url:
+                        links.append(ent.url)
+                except:
+                    pass
+
+        print("Extracted links:", links, flush=True)
+
+        if not links:
+            print("❌ No link found", flush=True)
             return
-
-        if "amazon" not in text.lower() and "amzn.to" not in text:
-            return
-
-        links = re.findall(r'(https?://\S+)', text)
 
         link = None
         for l in links:
-            if "amazon" in l or "amzn.to" in l:
+            if "amazon" in l or "amzn" in l:
                 link = l
                 break
 
         if not link:
-            return
+            link = links[0]
 
         clean_link = build_affiliate_link(link)
 
-        # 🚀 AI caption here
-        caption = generate_caption(text, clean_link)
+        if clean_link in posted_links:
+            print("⚠️ Duplicate skipped", flush=True)
+            return
 
-        await client.send_message(destination_channel, caption, link_preview=True)
+        posted_links.add(clean_link)
 
-        print("✅ AI DEAL POSTED", flush=True)
+        # ===== CLEAN TEXT =====
+        clean_text = re.sub(r'http\S+', '', text)
+
+        lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
+
+        title = "Hot Deal"
+        for line in lines:
+            if len(line) > 10 and not line.isdigit():
+                title = line
+                break
+
+        # ===== DEAL SCORING =====
+        score = 0
+        t = text.lower()
+
+        if "₹" in t: score += 1
+        if any(w in t for w in ["deal", "offer", "loot"]): score += 2
+        if any(w in t for w in ["limited", "ending"]): score += 2
+
+        if score >= 4:
+            prefix = "🔥 MEGA DEAL!"
+        elif score >= 2:
+            prefix = "⚡ HOT DEAL!"
+        else:
+            prefix = "💡 DEAL"
+
+        # ===== GENERATE CAPTION =====
+        caption = generate_caption(title, clean_link, prefix)
+
+        msg = await client.send_message(destination_channel, caption, link_preview=True)
+
+        # ===== AUTO PIN =====
+        if "🔥" in prefix:
+            try:
+                await client.pin_message(destination_channel, msg.id)
+            except:
+                pass
+
+        print("✅ DEAL POSTED", flush=True)
 
     await client.run_until_disconnected()
 
-# ===== RUN =====
+# ===== RUN BOT + FLASK =====
+
 def run_bot():
     asyncio.run(main())
 
