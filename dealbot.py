@@ -1,3 +1,11 @@
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "LootRadar Bot Running ✅"
 import asyncio
 import re
 import requests
@@ -138,4 +146,9 @@ async def main():
     await client.run_until_disconnected()
 
 # ===== RUN =====
-asyncio.run(main())
+def run_bot():
+    asyncio.run(main())
+
+if __name__ == "__main__":
+    threading.Thread(target=run_bot).start()
+    app.run(host="0.0.0.0", port=10000)
