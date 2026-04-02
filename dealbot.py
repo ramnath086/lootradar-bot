@@ -106,6 +106,8 @@ Product:
 # ===== MAIN BOT =====
 
 async def main():
+    print("🔥 Entered main()", flush=True)
+
     client = TelegramClient('render_session', api_id, api_hash)
     await client.start()
 
@@ -205,8 +207,20 @@ async def main():
 # ===== RUN BOT + FLASK =====
 
 def run_bot():
-    asyncio.run(main())
+    import time
+    while True:
+        try:
+            print("🚀 Starting bot...", flush=True)
+            asyncio.run(main())
+        except Exception as e:
+            print("❌ BOT ERROR:", e, flush=True)
+            time.sleep(5)
 
 if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
+    import threading
+
+    t = threading.Thread(target=run_bot)
+    t.start()
+
+    print("🌐 Starting Flask...", flush=True)
     app.run(host="0.0.0.0", port=10000)
