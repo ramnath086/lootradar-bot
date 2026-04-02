@@ -106,12 +106,16 @@ Product:
 # ===== MAIN BOT =====
 
 async def main():
+    import os
+
     print("🔥 Entered main()", flush=True)
+    print("📂 Checking session file...", flush=True)
+    print("Files in dir:", os.listdir(), flush=True)
 
     client = TelegramClient('render_session', api_id, api_hash)
     await client.start()
 
-    print("🚀 BOT LIVE...")
+    print("🚀 BOT LIVE...", flush=True)
 
     posted_links = set()
 
