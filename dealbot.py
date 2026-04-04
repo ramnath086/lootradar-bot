@@ -8,6 +8,19 @@ from datetime import datetime
 from telethon import TelegramClient, events
 from flask import Flask
 from openai import OpenAI
+WEBHOOK_URL = "https://hook.eu1.make.com/x7rje41fui0106impkl7fkygggorl5fk"
+
+def send_to_make(title, link):
+    data = {
+        "title": title,
+        "link": link
+    }
+
+    try:
+        requests.post(WEBHOOK_URL, json=data)
+        print("📤 Sent to Make", flush=True)
+    except Exception as e:
+        print("Webhook error:", e, flush=True)
 
 # ===== CONFIG =====
 api_id = 36935944
@@ -196,6 +209,7 @@ async def main():
         caption = generate_caption(title, clean_link, prefix)
 
         msg = await client.send_message(destination_channel, caption, link_preview=True)
+	send_to_make(caption, clean)
 
         # ===== AUTO PIN =====
         if "🔥" in prefix:
