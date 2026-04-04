@@ -206,19 +206,18 @@ async def main():
             prefix = "💡 DEAL"
 
         # ===== GENERATE CAPTION =====
-        caption = generate_caption(title, clean_link, prefix)
+caption = generate_caption(title, clean_link, prefix)
 
-        msg = await client.send_message(destination_channel, caption, link_preview=True)
+msg = await client.send_message(destination_channel, caption, link_preview=True)
 
-# ✅ FIXED LINE
 send_to_make(caption, clean_link)
 
-        # ===== AUTO PIN =====
-        if "🔥" in prefix:
-            try:
-                await client.pin_message(destination_channel, msg.id)
-            except:
-                pass
+# ===== AUTO PIN =====
+if "🔥" in prefix:
+    try:
+        await client.pin_message(destination_channel, msg.id)
+    except:
+        pass
 
         print("✅ DEAL POSTED", flush=True)
 
