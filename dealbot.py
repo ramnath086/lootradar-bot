@@ -209,7 +209,9 @@ async def main():
         caption = generate_caption(title, clean_link, prefix)
 
         msg = await client.send_message(destination_channel, caption, link_preview=True)
-            send_to_make(caption, clean)
+
+# ✅ FIXED LINE
+send_to_make(caption, clean_link)
 
         # ===== AUTO PIN =====
         if "🔥" in prefix:
