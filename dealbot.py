@@ -145,7 +145,6 @@ async def main():
 
         # ===== EXTRACT LINKS (ADVANCED) =====
         links = []
-
         links += re.findall(r'(https?://\S+)', text)
 
         if event.message.entities:
@@ -194,9 +193,12 @@ async def main():
         score = 0
         t = text.lower()
 
-        if "₹" in t: score += 1
-        if any(w in t for w in ["deal", "offer", "loot"]): score += 2
-        if any(w in t for w in ["limited", "ending"]): score += 2
+        if "₹" in t:
+            score += 1
+        if any(w in t for w in ["deal", "offer", "loot"]):
+            score += 2
+        if any(w in t for w in ["limited", "ending"]):
+            score += 2
 
         if score >= 4:
             prefix = "🔥 MEGA DEAL!"
@@ -206,22 +208,24 @@ async def main():
             prefix = "💡 DEAL"
 
         # ===== GENERATE CAPTION =====
-caption = generate_caption(title, clean_link, prefix)
+        caption = generate_caption(title, clean_link, prefix)
 
-msg = await client.send_message(destination_channel, caption, link_preview=True)
+        msg = await client.send_message(destination_channel, caption, link_preview=True)
 
-send_to_make(caption, clean_link)
+        # ===== SEND TO MAKE =====
+        send_to_make(caption, clean_link)
 
-# ===== AUTO PIN =====
-if "🔥" in prefix:
-    try:
-        await client.pin_message(destination_channel, msg.id)
-    except:
-        pass
+        # ===== AUTO PIN =====
+        if "🔥" in prefix:
+            try:
+                await client.pin_message(destination_channel, msg.id)
+            except:
+                pass
 
         print("✅ DEAL POSTED", flush=True)
 
     await client.run_until_disconnected()
+
 
 # ===== RUN BOT + FLASK =====
 
@@ -234,6 +238,7 @@ def run_bot():
         except Exception as e:
             print("❌ BOT ERROR:", e, flush=True)
             time.sleep(5)
+
 
 if __name__ == "__main__":
     import threading
