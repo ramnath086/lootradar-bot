@@ -45,7 +45,7 @@ def home():
     return "LootRadar Bot Running ✅"
 
 # ===== INSTAGRAM FUNCTIONS =====
-def # insta_login()
+def insta_login()
     try:
         insta.login(INSTA_USERNAME, INSTA_PASSWORD)
         print("📸 Instagram login success", flush=True)
@@ -60,7 +60,7 @@ def create_image(title):
     img.save(path)
     return path
 
-def # post_to_instagram(title):
+def post_to_instagram(title):
     try:
         img_path = create_image(title)
 
@@ -157,7 +157,7 @@ async def main():
 
     print("🚀 BOT LIVE...", flush=True)
 
-    insta_login()
+    # insta_login()
 
     posted_links = set()
 
@@ -221,7 +221,7 @@ async def main():
         msg = await client.send_message(destination_channel, caption, link_preview=True)
 
         # ===== INSTAGRAM POST =====
-        post_to_instagram(title)
+        # post_to_instagram(title)
 
         # ===== PIN =====
         if "🔥" in prefix:
