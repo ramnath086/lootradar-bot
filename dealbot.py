@@ -45,7 +45,7 @@ def home():
     return "LootRadar Bot Running ✅"
 
 # ===== INSTAGRAM FUNCTIONS =====
-def insta_login()
+def insta_login():
     try:
         insta.login(INSTA_USERNAME, INSTA_PASSWORD)
         print("📸 Instagram login success", flush=True)
