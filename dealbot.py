@@ -4,23 +4,13 @@ import requests
 import random
 import os
 import threading
-from datetime import datetime
 from telethon import TelegramClient, events
 from flask import Flask
 from openai import OpenAI
-WEBHOOK_URL = "https://hook.eu1.make.com/x7rje41fui0106impkl7fkygggorl5fk"
 
-def send_to_make(title, link):
-    data = {
-        "title": title,
-        "link": link
-    }
-
-    try:
-        requests.post(WEBHOOK_URL, json=data)
-        print("📤 Sent to Make", flush=True)
-    except Exception as e:
-        print("Webhook error:", e, flush=True)
+# ===== INSTAGRAM =====
+from instagrapi import Client
+from PIL import Image, ImageDraw
 
 # ===== CONFIG =====
 api_id = 36935944
@@ -37,18 +27,60 @@ source_channels = [
     -1002200312455
 ]
 
+# ===== OPENAI =====
 OPENAI_API_KEY = os.getenv("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")
 ai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-# ===== FLASK (KEEP RENDER ALIVE) =====
+# ===== INSTAGRAM CONFIG =====
+INSTA_USERNAME = "amazon_deals88"
+INSTA_PASSWORD = "Lootradar@86"
+
+insta = Client()
+
+# ===== FLASK =====
 app = Flask(__name__)
 
 @app.route('/')
 def home():
     return "LootRadar Bot Running ✅"
 
-# ===== LINK FUNCTIONS =====
+# ===== INSTAGRAM FUNCTIONS =====
+def insta_login():
+    try:
+        insta.login(INSTA_USERNAME, INSTA_PASSWORD)
+        print("📸 Instagram login success", flush=True)
+    except Exception as e:
+        print("Instagram login error:", e, flush=True)
 
+def create_image(title):
+    img = Image.new('RGB', (1080, 1080), color=(0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.text((50, 400), title[:80], fill=(255, 255, 255))
+    path = "deal.png"
+    img.save(path)
+    return path
+
+def post_to_instagram(title):
+    try:
+        img_path = create_image(title)
+
+        caption = f"""🔥 DEAL ALERT!
+
+{title}
+
+💰 Limited time offer
+👉 Link in bio
+
+Follow @{INSTA_USERNAME}
+"""
+
+        insta.photo_upload(img_path, caption)
+        print("📸 Posted to Instagram", flush=True)
+
+    except Exception as e:
+        print("Instagram error:", e, flush=True)
+
+# ===== LINK FUNCTIONS =====
 def expand_url(url):
     try:
         return requests.get(url, allow_redirects=True, timeout=5).url
@@ -68,7 +100,6 @@ def build_affiliate_link(url):
     return expanded
 
 # ===== AI CAPTION =====
-
 def generate_caption(title, link, prefix):
 
     cta_list = [
@@ -117,18 +148,16 @@ Product:
 """
 
 # ===== MAIN BOT =====
-
 async def main():
-    import os
 
     print("🔥 Entered main()", flush=True)
-    print("📂 Checking session file...", flush=True)
-    print("Files in dir:", os.listdir(), flush=True)
 
     client = TelegramClient('render_session', api_id, api_hash)
     await client.start()
 
     print("🚀 BOT LIVE...", flush=True)
+
+    insta_login()
 
     posted_links = set()
 
@@ -141,9 +170,8 @@ async def main():
         text = event.message.message or event.raw_text or ""
 
         print("\n📩 Incoming:", event.chat_id, flush=True)
-        print("Message:", text[:100], flush=True)
 
-        # ===== EXTRACT LINKS (ADVANCED) =====
+        # ===== EXTRACT LINKS =====
         links = []
         links += re.findall(r'(https?://\S+)', text)
 
@@ -155,10 +183,7 @@ async def main():
                 except:
                     pass
 
-        print("Extracted links:", links, flush=True)
-
         if not links:
-            print("❌ No link found", flush=True)
             return
 
         link = None
@@ -173,14 +198,12 @@ async def main():
         clean_link = build_affiliate_link(link)
 
         if clean_link in posted_links:
-            print("⚠️ Duplicate skipped", flush=True)
             return
 
         posted_links.add(clean_link)
 
-        # ===== CLEAN TEXT =====
+        # ===== TITLE =====
         clean_text = re.sub(r'http\S+', '', text)
-
         lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
 
         title = "Hot Deal"
@@ -189,33 +212,18 @@ async def main():
                 title = line
                 break
 
-        # ===== DEAL SCORING =====
-        score = 0
-        t = text.lower()
+        # ===== PREFIX =====
+        prefix = "🔥 MEGA DEAL!" if "₹" in text else "⚡ HOT DEAL!"
 
-        if "₹" in t:
-            score += 1
-        if any(w in t for w in ["deal", "offer", "loot"]):
-            score += 2
-        if any(w in t for w in ["limited", "ending"]):
-            score += 2
-
-        if score >= 4:
-            prefix = "🔥 MEGA DEAL!"
-        elif score >= 2:
-            prefix = "⚡ HOT DEAL!"
-        else:
-            prefix = "💡 DEAL"
-
-        # ===== GENERATE CAPTION =====
+        # ===== CAPTION =====
         caption = generate_caption(title, clean_link, prefix)
 
         msg = await client.send_message(destination_channel, caption, link_preview=True)
 
-        # ===== SEND TO MAKE =====
-        send_to_make(caption, clean_link)
+        # ===== INSTAGRAM POST =====
+        post_to_instagram(title)
 
-        # ===== AUTO PIN =====
+        # ===== PIN =====
         if "🔥" in prefix:
             try:
                 await client.pin_message(destination_channel, msg.id)
@@ -226,25 +234,16 @@ async def main():
 
     await client.run_until_disconnected()
 
-
-# ===== RUN BOT + FLASK =====
-
+# ===== RUN =====
 def run_bot():
     import time
     while True:
         try:
-            print("🚀 Starting bot...", flush=True)
             asyncio.run(main())
         except Exception as e:
             print("❌ BOT ERROR:", e, flush=True)
             time.sleep(5)
 
-
 if __name__ == "__main__":
-    import threading
-
-    t = threading.Thread(target=run_bot)
-    t.start()
-
-    print("🌐 Starting Flask...", flush=True)
+    threading.Thread(target=run_bot).start()
     app.run(host="0.0.0.0", port=10000)

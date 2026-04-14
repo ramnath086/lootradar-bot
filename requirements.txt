@@ -1,4 +1,6 @@
 telethon
-openai
-requests
 flask
+requests
+instagrapi
+pillow
+openai
