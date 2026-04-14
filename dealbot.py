@@ -45,7 +45,7 @@ def home():
     return "LootRadar Bot Running ✅"
 
 # ===== INSTAGRAM FUNCTIONS =====
-def insta_login():
+def # insta_login()
     try:
         insta.login(INSTA_USERNAME, INSTA_PASSWORD)
         print("📸 Instagram login success", flush=True)
@@ -60,7 +60,7 @@ def create_image(title):
     img.save(path)
     return path
 
-def post_to_instagram(title):
+def # post_to_instagram(title):
     try:
         img_path = create_image(title)
 
