@@ -4,13 +4,12 @@ import requests
 import random
 import os
 import threading
+import subprocess
+import time
+
 from telethon import TelegramClient, events
 from flask import Flask
 from openai import OpenAI
-
-# ===== INSTAGRAM =====
-from instagrapi import Client
-from PIL import Image, ImageDraw
 
 # ===== CONFIG =====
 api_id = 36935944
@@ -27,139 +26,130 @@ source_channels = [
     -1002200312455
 ]
 
-# ===== OPENAI =====
 OPENAI_API_KEY = os.getenv("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")
 ai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-# ===== INSTAGRAM CONFIG =====
-INSTA_USERNAME = "amazon_deals88"
-INSTA_PASSWORD = "Lootradar@86"
-
-insta = Client()
 
 # ===== FLASK =====
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "LootRadar Bot Running ✅"
+    return "Bot Running ✅"
 
-# ===== INSTAGRAM FUNCTIONS =====
-def insta_login():
-    try:
-        insta.login(INSTA_USERNAME, INSTA_PASSWORD)
-        print("📸 Instagram login success", flush=True)
-    except Exception as e:
-        print("Instagram login error:", e, flush=True)
+# ===== UTIL =====
 
-def create_image(title):
-    img = Image.new('RGB', (1080, 1080), color=(0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    draw.text((50, 400), title[:80], fill=(255, 255, 255))
-    path = "deal.png"
-    img.save(path)
-    return path
-
-def post_to_instagram(title):
-    try:
-        img_path = create_image(title)
-
-        caption = f"""🔥 DEAL ALERT!
-
-{title}
-
-💰 Limited time offer
-👉 Link in bio
-
-Follow @{INSTA_USERNAME}
-"""
-
-        insta.photo_upload(img_path, caption)
-        print("📸 Posted to Instagram", flush=True)
-
-    except Exception as e:
-        print("Instagram error:", e, flush=True)
-
-# ===== LINK FUNCTIONS =====
-def expand_url(url):
-    try:
-        return requests.get(url, allow_redirects=True, timeout=5).url
-    except:
-        return url
-
-def extract_asin(url):
-    match = re.search(r'/dp/([A-Z0-9]{10})', url)
+def extract_price(text):
+    match = re.search(r'₹\s?(\d+)', text)
     return match.group(1) if match else None
 
-def build_affiliate_link(url):
-    expanded = expand_url(url)
-    asin = extract_asin(expanded)
+def generate_hook():
+    hooks = [
+        "This deal will sell out fast 😳",
+        "Amazon mistake deal 🚨",
+        "Too cheap to ignore 🔥",
+        "Limited stock alert ⚠️",
+        "Hidden deal exposed 👀",
+        "Big price drop today 💸",
+        "Run before it’s gone 🏃",
+        "Steal deal alert 🚀"
+    ]
+    return random.choice(hooks)
 
-    if asin:
-        return f"https://www.amazon.in/dp/{asin}?tag={affiliate_tag}"
-    return expanded
+def generate_voice(title):
+    try:
+        speech = ai_client.audio.speech.create(
+            model="gpt-4o-mini-tts",
+            voice="alloy",
+            input=f"{generate_hook()}. {title}. Limited time deal."
+        )
+        path = "voice.mp3"
+        with open(path, "wb") as f:
+            f.write(speech.read())
+        return path
+    except:
+        return None
 
-# ===== AI CAPTION =====
-def generate_caption(title, link, prefix):
+def get_music():
+    try:
+        files = os.listdir("music")
+        return os.path.join("music", random.choice(files)) if files else None
+    except:
+        return None
 
-    cta_list = [
-        "📢 Join for daily Amazon deals 👉 https://t.me/smartlootradar",
-        "🔥 Don’t miss deals! Join now 👉 https://t.me/smartlootradar",
-        "⚡ Live deals here 👉 https://t.me/smartlootradar",
+# ===== VIDEO GENERATION =====
+
+def create_reel(img_path, title, text):
+    output = f"reel_{int(time.time())}.mp4"
+
+    price = extract_price(text)
+    mrp = str(int(price) + int(int(price)*0.5)) if price else ""
+
+    voice = generate_voice(title)
+    music = get_music()
+
+    hook = generate_hook()
+    safe_title = re.sub(r"[^\w\s]", "", title)[:40]
+
+    vf = (
+        "scale=1080:1920:force_original_aspect_ratio=decrease,"
+        "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,"
+        "zoompan=z='min(zoom+0.002,1.2)':d=125,"
+        f"drawtext=text='{hook}':x=50:y=100:fontsize=60:fontcolor=red,"
+        f"drawtext=text='{safe_title}':x=50:y=1400:fontsize=50:fontcolor=white,"
+    )
+
+    if price:
+        vf += f"drawtext=text='₹{price}':x=50:y=1550:fontsize=80:fontcolor=yellow,"
+    if mrp:
+        vf += f"drawtext=text='₹{mrp}':x=300:y=1550:fontsize=60:fontcolor=gray,"
+
+    vf += (
+        "drawtext=text='LIMITED TIME ⏳':x=50:y=1700:fontsize=50:fontcolor=orange,"
+        "drawtext=text='Follow @amazon_deals88':x=50:y=1850:fontsize=40:fontcolor=cyan"
+    )
+
+    cmd = ["ffmpeg", "-loop", "1", "-i", img_path]
+
+    if voice:
+        cmd += ["-i", voice]
+    if music:
+        cmd += ["-i", music]
+
+    cmd += [
+        "-t", "6",
+        "-vf", vf,
+        "-pix_fmt", "yuv420p",
+        "-y",
+        output
     ]
 
-    forward_line = "🔁 Share with friends who love deals!"
-    cta = random.choice(cta_list)
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    prompt = f"""
-Create a high-converting Telegram deal post.
+    return output
 
-Rules:
-- Max 4 lines
-- Use emojis
-- Add urgency
-- Strong CTA
+# ===== CAPTION =====
 
-Product:
-{title}
-"""
-
-    try:
-        response = ai_client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
-        )
-        ai_text = response.choices[0].message.content.strip()
-    except:
-        ai_text = title
-
+def generate_caption(title, link, prefix):
     return f"""{prefix}
 
-{ai_text}
+🔥 {title}
 
 👉 Buy Now: {link}
 
 ⚡ Limited time deal!
-
-{forward_line}
-
-{cta}
+📢 Join 👉 https://t.me/smartlootradar
 """
 
-# ===== MAIN BOT =====
-async def main():
+# ===== MAIN =====
 
-    print("🔥 Entered main()", flush=True)
+async def main():
 
     client = TelegramClient('render_session', api_id, api_hash)
     await client.start()
 
-    print("🚀 BOT LIVE...", flush=True)
+    print("🚀 BOT LIVE")
 
-    # insta_login()
-
-    posted_links = set()
+    posted = set()
 
     @client.on(events.NewMessage)
     async def handler(event):
@@ -167,81 +157,52 @@ async def main():
         if event.chat_id not in source_channels:
             return
 
-        text = event.message.message or event.raw_text or ""
+        text = event.raw_text or ""
 
-        print("\n📩 Incoming:", event.chat_id, flush=True)
-
-        # ===== EXTRACT LINKS =====
-        links = []
-        links += re.findall(r'(https?://\S+)', text)
-
-        if event.message.entities:
-            for ent in event.message.entities:
-                try:
-                    if hasattr(ent, 'url') and ent.url:
-                        links.append(ent.url)
-                except:
-                    pass
-
+        links = re.findall(r'(https?://\S+)', text)
         if not links:
             return
 
-        link = None
-        for l in links:
-            if "amazon" in l or "amzn" in l:
-                link = l
-                break
+        link = links[0]
 
-        if not link:
-            link = links[0]
-
-        clean_link = build_affiliate_link(link)
-
-        if clean_link in posted_links:
+        if link in posted:
             return
 
-        posted_links.add(clean_link)
+        posted.add(link)
 
-        # ===== TITLE =====
         clean_text = re.sub(r'http\S+', '', text)
         lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
+        title = lines[0] if lines else "Hot Deal"
 
-        title = "Hot Deal"
-        for line in lines:
-            if len(line) > 10 and not line.isdigit():
-                title = line
-                break
-
-        # ===== PREFIX =====
         prefix = "🔥 MEGA DEAL!" if "₹" in text else "⚡ HOT DEAL!"
 
-        # ===== CAPTION =====
-        caption = generate_caption(title, clean_link, prefix)
+        caption = generate_caption(title, link, prefix)
 
-        msg = await client.send_message(destination_channel, caption, link_preview=True)
+        msg = await client.send_message(destination_channel, caption)
 
-        # ===== INSTAGRAM POST =====
-        # post_to_instagram(title)
+        # ===== REEL GENERATION =====
+        if event.message.photo:
+            img = await event.download_media(file="product.jpg")
 
-        # ===== PIN =====
-        if "🔥" in prefix:
-            try:
-                await client.pin_message(destination_channel, msg.id)
-            except:
-                pass
+            video = create_reel(img, title, text)
 
-        print("✅ DEAL POSTED", flush=True)
+            with open("reels_queue.txt", "a") as f:
+                f.write(f"{video}|{title}\n")
+
+            print("🎬 Reel created:", video)
+
+        print("✅ Posted")
 
     await client.run_until_disconnected()
 
 # ===== RUN =====
+
 def run_bot():
-    import time
     while True:
         try:
             asyncio.run(main())
         except Exception as e:
-            print("❌ BOT ERROR:", e, flush=True)
+            print("ERROR:", e)
             time.sleep(5)
 
 if __name__ == "__main__":
