@@ -6,6 +6,9 @@ import os
 import threading
 import subprocess
 import time
+import imageio_ffmpeg as ffmpeg
+
+FFMPEG_PATH = ffmpeg.get_ffmpeg_exe()
 
 from telethon import TelegramClient, events
 from flask import Flask
@@ -108,7 +111,7 @@ def create_reel(img_path, title, text):
         "drawtext=text='Follow @amazon_deals88':x=50:y=1850:fontsize=40:fontcolor=cyan"
     )
 
-    cmd = ["ffmpeg", "-loop", "1", "-i", img_path]
+    cmd = [FFMPEG_PATH, "-loop", "1", "-i", img_path]
 
     if voice:
         cmd += ["-i", voice]
