@@ -160,7 +160,7 @@ async def main():
         print("EVENT CHAT ID:", event.chat_id, flush=True)
 
         if event.chat_id not in source_channels:
-        return
+            return
 
         text = event.raw_text or ""
 
