@@ -157,7 +157,9 @@ async def main():
     @client.on(events.NewMessage)
     async def handler(event):
 
-        if event.chat_id not in source_channels:
+        print("EVENT CHAT ID:", event.chat_id, flush=True)  # 👈 ADD THIS
+	
+	if event.chat_id not in source_channels:
             return
 
         text = event.raw_text or ""
