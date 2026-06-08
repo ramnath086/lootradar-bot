@@ -10,9 +10,34 @@ import imageio_ffmpeg as ffmpeg
 
 FFMPEG_PATH = ffmpeg.get_ffmpeg_exe()
 
+import sqlite3
 from telethon import TelegramClient, events
 from flask import Flask
 from openai import OpenAI
+
+# ===== DATABASE =====
+
+def init_db():
+    conn = sqlite3.connect("deals.db")
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS posted (url TEXT PRIMARY KEY)")
+    conn.commit()
+    conn.close()
+
+def is_posted(link):
+    conn = sqlite3.connect("deals.db")
+    c = conn.cursor()
+    c.execute("SELECT 1 FROM posted WHERE url=?", (link,))
+    result = c.fetchone()
+    conn.close()
+    return result is not None
+
+def mark_posted(link):
+    conn = sqlite3.connect("deals.db")
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO posted (url) VALUES (?)", (link,))
+    conn.commit()
+    conn.close()
 
 # ===== CONFIG =====
 api_id = 36935944
@@ -26,10 +51,11 @@ source_channels = [
     -1001407365889,
     -1002393042058,
     -1001179165333,
-    -1002200312455
+    -1002200312455,
+    -1001273763977
 ]
 
-OPENAI_API_KEY = os.getenv("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")
+OPENAI_API_KEY = "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"
 ai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ===== FLASK =====
@@ -45,6 +71,9 @@ def extract_price(text):
     match = re.search(r'₹\s?(\d+)', text)
     return match.group(1) if match else None
 
+from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
+import logging
+
 def generate_hook():
     hooks = [
         "This deal will sell out fast 😳",
@@ -58,18 +87,43 @@ def generate_hook():
     ]
     return random.choice(hooks)
 
+def convert_to_affiliate(url):
+    try:
+        # Expand URL if it's shortened
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'}
+        response = requests.get(url, headers=headers, allow_redirects=True, timeout=10)
+        final_url = response.url
+        
+        # Parse the expanded URL
+        parsed = urlparse(final_url)
+        
+        # Add Amazon Affiliate Tag if it's an amazon domain
+        if "amazon.in" in parsed.netloc or "amazon.com" in parsed.netloc:
+            query_params = dict(parse_qsl(parsed.query))
+            query_params["tag"] = affiliate_tag
+            
+            new_query = urlencode(query_params)
+            new_parsed = parsed._replace(query=new_query)
+            return urlunparse(new_parsed)
+            
+        return None
+    except Exception as e:
+        print("Affiliate conversion error:", e)
+        return None
+
 def generate_voice(title):
     try:
         speech = ai_client.audio.speech.create(
-            model="gpt-4o-mini-tts",
+            model="tts-1",
             voice="alloy",
             input=f"{generate_hook()}. {title}. Limited time deal."
         )
         path = "voice.mp3"
         with open(path, "wb") as f:
-            f.write(speech.read())
+            f.write(speech.content)
         return path
-    except:
+    except Exception as e:
+        print("Voice Error:", e)
         return None
 
 def get_music():
@@ -82,7 +136,8 @@ def get_music():
 # ===== VIDEO GENERATION =====
 
 def create_reel(img_path, title, text):
-    output = f"reel_{int(time.time())}.mp4"
+    os.makedirs("Insta posts", exist_ok=True)
+    output = f"Insta posts/reel_{int(time.time())}.mp4"
 
     price = extract_price(text)
     mrp = str(int(price) + int(int(price)*0.5)) if price else ""
@@ -147,12 +202,29 @@ def generate_caption(title, link, prefix):
 
 async def main():
 
-    client = TelegramClient('render_session', api_id, api_hash)
+    print("🔥 Entered main()", flush=True)
+
+    import os
+
+    print("Files:", os.listdir(), flush=True)
+
+    print(
+        "Session exists:",
+        os.path.exists("render_session.session"),
+        flush=True
+    )
+
+    client = TelegramClient(
+        "render_session",
+        api_id,
+        api_hash
+    )
+
+    print("📡 Starting Telegram...", flush=True)
+
     await client.start()
 
-    print("🚀 BOT LIVE")
-
-    posted = set()
+    print("🚀 BOT LIVE", flush=True)
 
     @client.on(events.NewMessage)
     async def handler(event):
@@ -168,12 +240,17 @@ async def main():
         if not links:
             return
 
-        link = links[0]
+        original_link = links[0]
 
-        if link in posted:
+        if is_posted(original_link):
             return
 
-        posted.add(link)
+        mark_posted(original_link)
+
+        link = convert_to_affiliate(original_link)
+        
+        if not link:
+            return
 
         clean_text = re.sub(r'http\S+', '', text)
         lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
@@ -183,11 +260,14 @@ async def main():
 
         caption = generate_caption(title, link, prefix)
 
-        msg = await client.send_message(destination_channel, caption)
+        caption = generate_caption(title, link, prefix)
 
-        # ===== REEL GENERATION =====
         if event.message.photo:
-            img = await event.download_media(file="product.jpg")
+            msg = await client.send_message(destination_channel, caption, file=event.message.photo)
+            
+            # ===== REEL GENERATION =====
+            os.makedirs("Insta posts", exist_ok=True)
+            img = await event.download_media(file=f"Insta posts/product_{int(time.time())}.jpg")
 
             video = create_reel(img, title, text)
 
@@ -195,6 +275,8 @@ async def main():
                 f.write(f"{video}|{title}\n")
 
             print("🎬 Reel created:", video)
+        else:
+            msg = await client.send_message(destination_channel, caption)
 
         print("✅ Posted")
 
@@ -210,6 +292,37 @@ def run_bot():
             print("ERROR:", e)
             time.sleep(5)
 
+def run_bot():
+    while True:
+        try:
+            print("🚀 Starting bot...", flush=True)
+            asyncio.run(main())
+
+        except Exception as e:
+            import traceback
+
+            print("❌ BOT ERROR:", e, flush=True)
+            traceback.print_exc()
+
+            time.sleep(5)
+
+
 if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
-    app.run(host="0.0.0.0", port=10000)
+
+    print("🧵 Starting bot thread...", flush=True)
+
+    t = threading.Thread(
+        target=run_bot,
+        daemon=True
+    )
+
+    t.start()
+
+    print("🧵 Bot thread started", flush=True)
+
+    print("🌐 Starting Flask...", flush=True)
+
+    app.run(
+        host="0.0.0.0",
+        port=10000
+    )
