@@ -238,7 +238,7 @@ async def main():
         print("SOURCE LIST:", source_channels, flush=True)
 
         if event.chat_id not in source_channels:
-        print("❌ SKIPPED CHANNEL:", event.chat_id, flush=True)
+            print("❌ SKIPPED CHANNEL:", event.chat_id, flush=True)
         return
 
         print("✅ MATCHED SOURCE CHANNEL:", event.chat_id, flush=True)
