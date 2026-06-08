@@ -235,8 +235,14 @@ async def main():
         print("HAS PHOTO:", bool(event.message.photo), flush=True)
         print("TEXT:", (event.raw_text or "")[:100], flush=True)
 
+        print("SOURCE LIST:", source_channels, flush=True)
+
         if event.chat_id not in source_channels:
-            return
+        print("❌ SKIPPED CHANNEL:", event.chat_id, flush=True)
+        return
+
+        print("✅ MATCHED SOURCE CHANNEL:", event.chat_id, flush=True)
+        print("🎯 DEAL CHANNEL HIT", flush=True)
 
         text = event.raw_text or ""
 
