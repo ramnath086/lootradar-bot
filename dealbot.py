@@ -225,11 +225,15 @@ async def main():
     await client.start()
 
     print("🚀 BOT LIVE", flush=True)
+    print("SOURCE CHANNELS:", source_channels, flush=True)
 
     @client.on(events.NewMessage)
     async def handler(event):
 
-        print("EVENT CHAT ID:", event.chat_id, flush=True)
+        print("🔥 HANDLER TRIGGERED", flush=True)
+        print("CHAT:", event.chat_id, flush=True)
+        print("HAS PHOTO:", bool(event.message.photo), flush=True)
+        print("TEXT:", (event.raw_text or "")[:100], flush=True)
 
         if event.chat_id not in source_channels:
             return
